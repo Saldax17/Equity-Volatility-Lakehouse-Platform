@@ -121,9 +121,8 @@ Equity-Volatility-Lakehouse-Platform/
 
 
 
+```bash
 
-
----
 
 # ⚙️ 4. Instalación
 
