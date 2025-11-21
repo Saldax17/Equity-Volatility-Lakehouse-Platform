@@ -57,20 +57,13 @@ cover/
 *.mo
 *.pot
 
-# Django, Flask, db
+# Logs
 *.log
+
+# Database (local)
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-instance/
-.webassets-cache
-
-# Sphinx
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
 
 #############################################
 #               JUPYTER                     #
@@ -101,32 +94,46 @@ config/config.py
 *.secret
 *.credentials
 *.p12
+*.json               # Para claves GCP o service accounts
+*.aws                # Por si usas CLI
 
 #############################################
 #          LAKEHOUSE (BRONZE/SILVER/GOLD)   #
 #############################################
 
-# Important: never upload local data
+# Data layers
 data/
 data/bronze/
 data/silver/
 data/gold/
 
-# Temporary Spark files
+# Parquet / Iceberg / Hive artifacts
+*.parquet
 *.crc
 *.snappy
+*.avro
+*.orc
+
+# Spark Warehouse
 spark-warehouse/
 derby.log
 .metastore/
 spark-events/
 spark-logs/
 
+# Iceberg temp files
+.metadata/
+*.metadata.json
+*.snap
+*.manifest
+*.avro
+
 # Glue / Spark checkpoints
 checkpoint/
 checkpoints/
 
 #############################################
-#               MACHINE LEARNING            #
+#       MACHINE LEARNING / EXPERIMENTS      #
 #############################################
 
 # Model artifacts
@@ -135,10 +142,23 @@ models/artifacts/
 *.joblib
 *.h5
 *.onnx
+*.model
+*.bin
 
-# ML experiment tracking (if added later)
+# ML tracking folders
 mlruns/
 mlflow/
+
+#############################################
+#         NOTEBOOK OUTPUT / VISUALS         #
+#############################################
+
+# Images generated inside notebooks
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
 
 #############################################
 #               IDE / EDITOR                #
@@ -147,10 +167,8 @@ mlflow/
 # VS Code
 .vscode/
 
-# PyCharm
+# PyCharm / JetBrains
 .idea/
-
-# JetBrains
 *.iml
 
 #############################################
@@ -165,11 +183,22 @@ __marimo__/
 # Ruff
 .ruff_cache/
 
-# cursor AI editor
+# Cursor AI
 .cursorignore
 .cursorindexingignore
 
-# Pixi / PDM / Poetry leftovers
+# Pixi / PDM / Poetry
 .pdm-python
 .pdm-build/
 .pixi
+.poetry/
+
+#############################################
+#                 OS SYSTEM                 #
+#############################################
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
