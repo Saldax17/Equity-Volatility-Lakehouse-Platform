@@ -58,6 +58,8 @@ Evaluación:
 
 # 📂 3. Estructura del Repositorio
 
+```bash
+
 Equity-Volatility-Lakehouse-Platform/
 │
 ├── README.md
@@ -110,12 +112,13 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── pipeline_completo.png
 │   └── arquitectura_aws.png
 │
-├── data/    (NO se sube a GitHub)
+├── data/    # NO se sube a GitHub
 │   ├── bronze/
 │   ├── silver/
 │   └── gold/
 │
 └── main.py
+
 
 
 
