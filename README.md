@@ -1,63 +1,122 @@
 # 📈 Equity Volatility Lakehouse Platform (EVLP)
 
-**EVLP** es una plataforma end-to-end diseñada para analizar y predecir la volatilidad de acciones del mercado estadounidense usando una arquitectura moderna basada en *Lakehouse* (Medallion: Bronze–Silver–Gold), procesamiento distribuido con Spark, APIs financieras y modelos de Machine Learning.
+**EVLP** es una plataforma end-to-end diseñada para analizar y predecir la volatilidad de acciones del mercado estadounidense usando una arquitectura moderna basada en **Lakehouse** (Medallion: Bronze–Silver–Gold), procesamiento distribuido con **Spark**, APIs financieras y modelos de **Machine Learning**.
+
+<p align="left">
+  <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" />
+  <img src="https://img.shields.io/badge/Spark-3.x-orange?logo=apache-spark" />
+  <img src="https://img.shields.io/badge/AWS%20Glue-ETL-yellow?logo=amazon-aws" />
+  <img src="https://img.shields.io/badge/Apache%20Iceberg-Lakehouse-green?logo=apache" />
+  <img src="https://img.shields.io/badge/ML-Classification-red?logo=google" />
+</p>
 
 ---
 
 # 🧩 1. Descripción del Proyecto
 
-La *Equity Volatility Lakehouse Platform (EVLP)* ingesta datos financieros desde Alpaca, EODHD e iShares; limpia y transforma los datos en capas (Bronze → Silver → Gold); genera características avanzadas de volatilidad; y entrena modelos de machine learning para detectar episodios de alta volatilidad.
+La *Equity Volatility Lakehouse Platform* ingesta datos desde **Alpaca**, **EODHD** e **iShares**; limpia y transforma los datos en capas Bronze → Silver → Gold; genera características avanzadas orientadas a volatilidad; y entrena modelos de machine learning para detectar episodios de alta volatilidad.
 
 Incluye:
-- Ingesta de datos con Python.
-- Procesamiento masivo con Spark (AWS Glue).
-- Lakehouse con Apache Iceberg en S3.
-- Feature engineering para series de tiempo.
-- Modelos ML de clasificación.
-- Visualización y análisis descriptivo.
+- Ingesta de datos con Python  
+- Procesamiento distribuido con Spark (AWS Glue)  
+- Lakehouse con Apache Iceberg sobre S3  
+- Feature engineering orientado a series de tiempo  
+- Modelos ML de clasificación  
+- Visualización y análisis descriptivo  
 
 ---
 
 # 🏗 2. Arquitectura del Proyecto
 
-## 🔶 **Medallion Architecture (Lakehouse)**
+## 🔶 Medallion Architecture (Lakehouse)
 
-### 🥉 Bronze  
+### 🥉 Bronze – Raw Layer
 Datos crudos tal como provienen de las APIs:
 - OHLCV de Alpaca  
 - Constituyentes históricos de EODHD  
 - Listas de ETFs de iShares  
 
-### 🥈 Silver  
-Datos limpios y estandarizados con Spark:
-- Timestamps normalizados  
-- Rejilla temporal completa  
+---
+
+### 🥈 Silver – Clean Layer
+Procesamiento con Spark:
+- Normalización de timestamps  
+- Rejilla temporal completa (30 min, solo días hábiles)  
 - Imputación (forward-fill / backfill)  
-
-### 🥇 Gold  
-Feature engineering:
-- % High–Low  
-- % Open–Close  
-- Gaps  
-- Lookbacks (1d, 7d, 28d, 112d)  
-
-## 🧠 **ML Pipeline**
-Modelos considerados:
-- Logistic Regression  
-- Random Forest  
-- Gradient Boosting  
-- K-Means (clustering de volatilidad)
-
-Evaluación:
-- Maximización del f1-score
-
+- Unificación de símbolos × timestamps  
 
 ---
 
-# 📂 3. Estructura del Repositorio
+### 🥇 Gold – Feature Layer
+Feature engineering para volatilidad:
+- % High–Low  
+- % Open–Close  
+- Gaps de apertura  
+- Lookbacks: 1d, 7d, 28d, 112d  
+
+---
+
+# ⚙️ 3. Pipeline de Procesamiento (AWS Glue • Spark • Iceberg)
+
+El proyecto utiliza dos fases principales para transformar los datos y construir el Lakehouse.
+
+## 🥈 **Fase 1 – Limpieza y Rejilla Temporal (Silver)**  
+📄 Código base: `procesamiento_fase_1.py`  
+- Lectura de tabla Iceberg Bronze  
+- Selección aleatoria de símbolos  
+- Generación de rejilla temporal (30m)  
+- Join símbolo × timestamp  
+- Forward-fill y backfill de OHLCV  
+- Corrección de volumen y trade_count  
+- Escritura a:  
+  **`proyecto1db.stock_iceberg_sample`**
+
+---
+
+## 🥇 **Fase 2 – Feature Engineering (Gold)**  
+📄 Código base: `procesamiento_fase_2.py`  
+- Cálculo de volatilidad:
+  - % High–Low  
+  - % Open–Close  
+  - Gap de apertura  
+- Lookbacks:
+  - 1d, 7d, 28d, 112d  
+- Generación de:  
+  `pct_change_<period>`  
+- Limpieza de columnas auxiliares  
+- Ordenamiento por símbolo + timestamp  
+
+---
+
+## 🔁 **Diagrama del Pipeline**
+_(Guardado en `/architecture/pipeline_completo.png`)_  
+Incluye:
+- Ingesta  
+- Bronze  
+- Silver (F1)  
+- Gold (F2)  
+- ML Pipeline  
+
+---
+
+# 🧠 4. ML Pipeline
+
+Modelos implementados:
+- Logistic Regression  
+- Decision Tree  
+- Random Forest  
+- Gradient Boosting  
+- XGBoost  
+- K-Means (clustering de volatilidad)
+
+Evaluación:
+- Maximización del **F1-score** como métrica principal  
+
+---
+
+# 📂 5. Estructura del Repositorio
 
 ```bash
-
 Equity-Volatility-Lakehouse-Platform/
 │
 ├── README.md
@@ -98,6 +157,7 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── bronze/
 │   ├── silver/
 │   └── gold/
+
 
 
 ```
