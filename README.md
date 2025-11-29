@@ -75,30 +75,9 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── my_alpaca.py
 │   ├── my_eodhd.py
 │   ├── my_ishares.py
+│   ├── my_models.py
+
 │   └── helpers.py
-│
-├── ingestion/
-│   ├── alpaca_ingest.py
-│   ├── eodhd_ingest.py
-│   └── ishares_ingest.py
-│
-├── processing/
-│   ├── spark_fase_1_cleaning.py
-│   ├── spark_fase_2_features.py
-│   └── utils_spark.py
-│
-├── models/
-│   ├── train_model.py
-│   ├── evaluate_model.py
-│   └── artifacts/
-│       └── (modelos entrenados)
-│
-├── notebooks/
-│   ├── 00_consulta_apis.ipynb
-│   ├── 01_fase_1_ingesta_silver.ipynb
-│   ├── 02_fase_2_features_gold.ipynb
-│   ├── 03_modelado_ml.ipynb
-│   └── 04_visualizacion.ipynb
 │
 ├── docs/
 │   ├── Informe_Final.pdf
@@ -112,7 +91,7 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── pipeline_completo.png
 │   └── arquitectura_aws.png
 │
-├── data/    # NO se sube a GitHub
+├── data/     # (Ignorado en GitHub)
 │   ├── bronze/
 │   ├── silver/
 │   └── gold/
