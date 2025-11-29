@@ -162,8 +162,9 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── my_models.py
 │   ├── my_stock_functions.py
 │   └── helpers.py
+│
 ├── docs/
-│   ├── Informe_Final.pdf
+│   ├── EDA y limpieza SQL.docx
 │   ├── Presentacion.pdf
 │   ├── Preliminar.pdf
 │   ├── Propuesta.pdf
