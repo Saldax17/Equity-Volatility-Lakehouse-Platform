@@ -199,10 +199,10 @@ Equity-Volatility-Lakehouse-Platform/
 
 ### Instalación
 
+```bash
 git clone https://github.com/<tu-usuario>/proyecto-volatilidad.git
 cd proyecto-volatilidad
 pip install -r requirements.txt
-
 
 
 
