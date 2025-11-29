@@ -12,16 +12,50 @@
 
 ---
 
+# 📥 0. Ingesta de Datos desde APIs (Raw Ingestion Layer)
+
+La plataforma inicia con una fase de ingesta avanzada que combina datos de **EODHD**, **Alpaca** e **iShares** para construir el dataset base que alimenta la capa Bronze en el Lakehouse.
+
+📄 Código: `ingestion/consulta_de_datos_con_apis.py`  
+
+
+### ✔ EODHD – Índices y Constituyentes Históricos
+- Descarga de índices: **GSPC**, **MID**, **SML**
+- Obtención de constituyentes históricos diarios
+- Limpieza de sufijos en tickers (`_old`, `_old1`, `_old2`)
+- Reemplazo de caracteres inválidos (`-` → `.`)
+- Normalización a timezone **America/New_York**
+
+### ✔ iShares – ETF Constituents
+- Carga de componentes del ETF **IWB** desde archivo XLS
+- Generación de listas de símbolos para consulta masiva
+
+### ✔ Alpaca – Historical Bars (30m)
+- Descarga de datos OHLCV en intervalos de 30 minutos
+- Rango histórico: **2007 – 2025**
+- Ajustes: RAW / ALL
+- Uso de:
+  - MyAlpacaJob  
+  - MyAlpacaStock  
+  - StockHistoricalDataClient  
+
+### ✔ Dataset Final
+- Ensamble diario de constituyentes activos
+- Descarga selectiva de barras 30m por símbolo
+- Preparación final para ser almacenado como **Bronze** en S3
+
+---
+
 # 🧩 1. Descripción del Proyecto
 
-La *Equity Volatility Lakehouse Platform* ingesta datos desde **Alpaca**, **EODHD** e **iShares**; limpia y transforma los datos en capas Bronze → Silver → Gold; genera características avanzadas orientadas a volatilidad; y entrena modelos de machine learning para detectar episodios de alta volatilidad.
+La plataforma procesa datos financieros a través de las capas Bronze → Silver → Gold, realiza feature engineering avanzado y entrena modelos de machine learning orientados a clasificar volatilidad.
 
 Incluye:
-- Ingesta de datos con Python  
-- Procesamiento distribuido con Spark (AWS Glue)  
-- Lakehouse con Apache Iceberg sobre S3  
-- Feature engineering orientado a series de tiempo  
-- Modelos ML de clasificación  
+- Ingesta desde APIs financieras  
+- Procesamiento distribuido (Spark / AWS Glue)  
+- Lakehouse con Apache Iceberg  
+- Feature engineering (volatilidad y lookbacks)  
+- Modelos ML de clasificación y clustering  
 - Visualización y análisis descriptivo  
 
 ---
@@ -31,24 +65,22 @@ Incluye:
 ## 🔶 Medallion Architecture (Lakehouse)
 
 ### 🥉 Bronze – Raw Layer
-Datos crudos tal como provienen de las APIs:
-- OHLCV de Alpaca  
-- Constituyentes históricos de EODHD  
-- Listas de ETFs de iShares  
+- Datos crudos desde Alpaca, EODHD e iShares  
+- Sin transformación  
+- Historial de constituyentes y OHLCV 30m  
 
 ---
 
 ### 🥈 Silver – Clean Layer
-Procesamiento con Spark:
-- Normalización de timestamps  
-- Rejilla temporal completa (30 min, solo días hábiles)  
-- Imputación (forward-fill / backfill)  
-- Unificación de símbolos × timestamps  
+- Normalización de timestamps (NY timezone)  
+- Rejilla temporal completa (30 minutos)  
+- Imputación forward-fill / backfill  
+- Unión símbolo × timestamp  
 
 ---
 
 ### 🥇 Gold – Feature Layer
-Feature engineering para volatilidad:
+Feature engineering orientado a series de tiempo:
 - % High–Low  
 - % Open–Close  
 - Gaps de apertura  
@@ -58,44 +90,34 @@ Feature engineering para volatilidad:
 
 # ⚙️ 3. Pipeline de Procesamiento (AWS Glue • Spark • Iceberg)
 
-El proyecto utiliza dos fases principales para transformar los datos y construir el Lakehouse.
+## 🥈 Fase 1 — Limpieza y Rejilla Temporal (Silver Layer)
+📄 Código: `processing/procesamiento_fase_1.py`  
+Origen técnico: :contentReference[oaicite:1]{index=1}
 
-## 🥈 **Fase 1 – Limpieza y Rejilla Temporal (Silver)**  
-📄 Código base: `procesamiento_fase_1.py`  
-- Lectura de tabla Iceberg Bronze  
-- Selección aleatoria de símbolos  
-- Generación de rejilla temporal (30m)  
+Incluye:
+- Lectura desde Iceberg (Bronze)  
+- Selección aleatoria de símbolos representativos  
+- Construcción de rejilla temporal (30 min)  
 - Join símbolo × timestamp  
 - Forward-fill y backfill de OHLCV  
-- Corrección de volumen y trade_count  
-- Escritura a:  
+- Limpieza de volumen y trade_count  
+- Escritura en Iceberg:
   **`proyecto1db.stock_iceberg_sample`**
 
 ---
 
-## 🥇 **Fase 2 – Feature Engineering (Gold)**  
-📄 Código base: `procesamiento_fase_2.py`  
-- Cálculo de volatilidad:
-  - % High–Low  
-  - % Open–Close  
-  - Gap de apertura  
+## 🥇 Fase 2 — Feature Engineering (Gold Layer)
+📄 Código: `processing/procesamiento_fase_2.py`  
+Origen técnico: :contentReference[oaicite:2]{index=2}
+
+Incluye:
+- Cálculo de volatilidad (% High–Low, % Open–Close)  
+- Gap de apertura vs close previo  
 - Lookbacks:
   - 1d, 7d, 28d, 112d  
-- Generación de:  
-  `pct_change_<period>`  
+- Generación de columnas `pct_change_<period>`  
 - Limpieza de columnas auxiliares  
 - Ordenamiento por símbolo + timestamp  
-
----
-
-## 🔁 **Diagrama del Pipeline**
-_(Guardado en `/architecture/pipeline_completo.png`)_  
-Incluye:
-- Ingesta  
-- Bronze  
-- Silver (F1)  
-- Gold (F2)  
-- ML Pipeline  
 
 ---
 
@@ -107,10 +129,10 @@ Modelos implementados:
 - Random Forest  
 - Gradient Boosting  
 - XGBoost  
-- K-Means (clustering de volatilidad)
+- K-Means (clustering)
 
-Evaluación:
-- Maximización del **F1-score** como métrica principal  
+Evaluación del desempeño:
+- **F1-score** como métrica principal  
 
 ---
 
@@ -140,13 +162,19 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── my_models.py
 │   ├── my_stock_functions.py
 │   └── helpers.py
-│
 ├── docs/
 │   ├── Informe_Final.pdf
 │   ├── Presentacion.pdf
 │   ├── Preliminar.pdf
 │   ├── Propuesta.pdf
 │   └── arquitectura_medallion.drawio
+│
+├── ingestion/
+│   └── consulta_de_datos_con_apis.ipynb   
+│
+├── processing/
+│   ├── Procesamiento_fase_1.ipynb
+│   └── Procesamiento_fase_2.ipynb 
 │
 ├── architecture/
 │   ├── arquitectura_medallion.png
@@ -157,8 +185,6 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── bronze/
 │   ├── silver/
 │   └── gold/
-
-
 
 ```
 
