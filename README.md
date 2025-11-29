@@ -49,10 +49,8 @@ Modelos considerados:
 - K-Means (clustering de volatilidad)
 
 Evaluación:
-- F1 Score  
-- Accuracy  
-- ROC–AUC  
-- Feature Importance  
+- Maximización del f1-score
+
 
 ---
 
@@ -67,8 +65,13 @@ Equity-Volatility-Lakehouse-Platform/
 ├── .gitignore
 │
 ├── config/
-│   ├── config_template.py
-│   └── README.md
+│   ├── __init__.py
+│   └── parameters.py
+│
+├── data_alpaca/
+│   ├── __init__.py
+│   ├── alpa.py
+│   └── bars.py
 │
 ├── data_apis/
 │   ├── __init__.py
@@ -76,7 +79,7 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── my_eodhd.py
 │   ├── my_ishares.py
 │   ├── my_models.py
-
+│   ├── my_stock_functions.py
 │   └── helpers.py
 │
 ├── docs/
@@ -95,9 +98,6 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── bronze/
 │   ├── silver/
 │   └── gold/
-│
-└── main.py
-
 
 
 ```

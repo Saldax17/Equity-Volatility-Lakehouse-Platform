@@ -1,413 +1,337 @@
 import os
 from zoneinfo import ZoneInfo
-import pandas as pd
-
 from config import ConnectionParameters
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.enums import DataFeed, Adjustment
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
-
+import pandas as pd
 from data_apis import MyMarketIndexList
 from data_apis import MyHelper
 
-
-# ============================================================
-#                    MyAlpacaStock
-# ============================================================
-
 class MyAlpacaStock:
-    """
-    Wrapper cleanly handling Alpaca API calls, local file loading,
-    merging adjusted/unadjusted datasets, trimming data, and producing
-    specialized event-based DataFrames.
-
-    This class is intentionally refactored under Option B:
-    clean code + SOLID principles while maintaining compatibility.
-    """
-
-    def __init__(self, symbol: str = "", feed: str = DataFeed.SIP):
-        self._cfg = ConnectionParameters()
-        self._client = StockHistoricalDataClient(
-            self._cfg.ALPACA_API_KEY,
-            self._cfg.ALPACA_SECRET_KEY
-        )
-        self._symbol = symbol
-        self._feed = feed
-
-        # state
-        self._df: pd.DataFrame | None = None
-        self._quantity: int | None = None
-        self._unit: TimeFrameUnit | None = None
-
-    # ------------------------------------------------------------
-    # Internal Utilities
-    # ------------------------------------------------------------
-
-    def _to_ny(self, date_str: str) -> pd.Timestamp:
-        """Convert YYYY-MM-DD string to NY timezone at 00:00:01."""
-        return (
-            pd.Timestamp(date_str)
-            .tz_localize(ZoneInfo("America/New_York"))
-            .floor("D")
-            + pd.Timedelta(seconds=1)
-        )
-
-    def _to_ny_end(self, date_str: str) -> pd.Timestamp:
-        """Convert YYYY-MM-DD string to NY timezone at 23:59:59."""
-        return (
-            pd.Timestamp(date_str)
-            .tz_localize(ZoneInfo("America/New_York"))
-            .ceil("D")
-            - pd.Timedelta(seconds=1)
-        )
-
-    def _apply_standard_schema(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Convert Alpaca MultiIndex -> flat schema with columns:
-        ['symbol', 'timestamp', ...] and convert timestamp to NY.
-        """
-        df = df.copy()
-        df.insert(0, "symbol", df.index.get_level_values("symbol"))
-        df.insert(
-            1,
-            "timestamp",
-            df.index.get_level_values("timestamp").tz_convert("America/New_York"),
-        )
-        return df.reset_index(drop=True)
-
-    # ------------------------------------------------------------
-    # API Queries
-    # ------------------------------------------------------------
-
-    def query_historical_data(
-        self,
-        start: str,
-        end: str,
-        quantity: int,
-        unit: TimeFrameUnit = TimeFrameUnit.Minute,
-        adjustment: Adjustment = Adjustment.ALL,
-    ) -> None:
-        """
-        Query Alpaca API for historical bars.
-        Saves standardized DataFrame internally.
-        """
-
-        self._quantity = quantity
-        self._unit = unit
-
-        start_ts = self._to_ny(start)
-        end_ts = self._to_ny_end(end)
-
-        request = StockBarsRequest(
-            symbol_or_symbols=self._symbol,
-            timeframe=TimeFrame(amount=quantity, unit=unit),
-            start=start_ts,
-            end=end_ts,
-            adjustment=adjustment,
-            feed=self._feed,
-        )
-
-        try:
-            df = self._client.get_stock_bars(request).df
-            self._df = self._apply_standard_schema(df) if not df.empty else pd.DataFrame()
-        except Exception as exc:
-            if "invalid symbol" in str(exc).lower():
-                print(f"[WARN] Invalid symbol '{self._symbol}'. No data retrieved.")
-                self._df = pd.DataFrame()
-            else:
-                raise exc
-
-    # ------------------------------------------------------------
-    # Load Local Files (Bronze Layer)
-    # ------------------------------------------------------------
-
-    def query_from_file_data(
-        self,
-        quantity: int,
-        unit: TimeFrameUnit = TimeFrameUnit.Minute,
-        adjustment: Adjustment = Adjustment.ALL,
-    ) -> None:
-        """
-        Load historical bars from local CSV (bronze).
-        """
-        adj_folder = "adj_all" if adjustment == Adjustment.ALL else "adj_raw"
-        path = (
-            f"{self._cfg.PATH_TO_SAVE}{quantity}{unit.value}_history_{adj_folder}/"
-            f"{self._symbol}.csv"
-        )
-
-        df = pd.read_csv(path, parse_dates=["timestamp"])
-        df = df.sort_values(["symbol", "timestamp"]).reset_index(drop=True)
-
-        self._df = df
-        self._quantity = quantity
-        self._unit = unit
-
-    # ------------------------------------------------------------
-    # DataFrame Operations
-    # ------------------------------------------------------------
-
-    def merge_raw_and_all_from_files(
-        self,
-        quantity: int,
-        unit: TimeFrameUnit = TimeFrameUnit.Minute,
-    ) -> None:
-        """
-        Merge adjusted ALL and adjusted RAW datasets with consistent schema.
-        """
-        self._quantity = quantity
-        self._unit = unit
-
-        # load ALL
-        self.query_from_file_data(quantity, unit, adjustment=Adjustment.ALL)
-        df_all = self.get_df().copy()
-
-        # load RAW
-        self.query_from_file_data(quantity, unit, adjustment=Adjustment.RAW)
-        df_raw = self.get_df().copy()
-
-        # merge on symbol+timestamp
-        merged = pd.merge(
-            df_all[["symbol", "timestamp", "close"]],
-            df_raw,
-            on=["symbol", "timestamp"],
-            how="inner",
-            suffixes=("_adj", ""),
-        )
-        self._df = merged
-
-    def trim_df_by_date(self, start: str, end: str) -> None:
-        """
-        Filter dataframe between two boundary dates (YYYY-MM-DD).
-        """
-        if self._df is None:
-            return
-
-        start_ts = pd.Timestamp(start).tz_localize(ZoneInfo("America/New_York"))
-        end_ts = pd.Timestamp(end).tz_localize(ZoneInfo("America/New_York"))
-
-        mask = (self._df["timestamp"] >= start_ts) & (
-            self._df["timestamp"] <= end_ts
-        )
-        self._df = self._df.loc[mask].reset_index(drop=True)
-
-    # ------------------------------------------------------------
-    # Event Builder Logic
-    # ------------------------------------------------------------
+    def __init__(self, feed: str = DataFeed.SIP, symbol: str = ""):
+        self.__cp = ConnectionParameters()
+        self.__shdc = StockHistoricalDataClient(self.__cp.ALPACA_API_KEY, self.__cp.ALPACA_SECRET_KEY)
+        self.__feed = feed
+        self.__symbol = symbol
 
     def build_event_df(self) -> pd.DataFrame:
         """
-        Build trend-based event DataFrame using dynamic thresholds.
-        (Refactor Option B applied: smaller blocks, cleaner logic)
+        Build event DataFrame where each row is a full trend (continuous movement in one direction)
+        until an opposite movement surpasses the dynamic threshold given by MyHelper.min_max_target().
+        Uses factor ratios between adjusted and raw close to neutralize splits/dividends.
         """
 
-        if self._df is None or self._df.empty:
-            return pd.DataFrame()
-
-        df = self._df.reset_index(drop=True)
-
-        # initial references
-        symbol = df.loc[0, "symbol"]
-        ref_price = float(df.loc[0, "open"])
-        ref_factor = float(df.loc[0, "close_adj"]) / float(df.loc[0, "close"])
-
-        start_time = df.loc[0, "timestamp"]
-        low, high = ref_price, ref_price
-
         events = []
+        df30 = self.__df.reset_index(drop=True)
+        factor_ratio = 1.0
+        if df30.empty:
+            return pd.DataFrame(events)
 
-        for _, row in df.iterrows():
-            factor_ratio = float(row["close_adj"]) / float(row["close"]) / ref_factor
-            adj_high = row["high"] * factor_ratio
-            adj_low = row["low"] * factor_ratio
+        symbol = df30.loc[0, "symbol"]
+        reference_price = pd.to_numeric(df30.loc[0, "open"], errors="coerce")
+        low = reference_price
+        high = reference_price
+        price_point_adj = reference_price
+        start_time = df30.loc[0, "timestamp"]
+        reference_factor = pd.to_numeric(df30.loc[0, "close_adj"], errors="coerce") / pd.to_numeric(df30.loc[0, "close"], errors="coerce")
 
-            min_t, max_t = MyHelper.min_max_target(ref_price)
+        for _, row30 in df30.iterrows():
+            candle_factor = pd.to_numeric(row30["close_adj"], errors="coerce") / pd.to_numeric(row30["close"], errors="coerce")
+            factor_ratio = round(candle_factor / reference_factor, 3)
+            adj_high_30 = row30["high"] * factor_ratio
+            adj_low_30 = row30["low"] * factor_ratio
 
-            # movement does not break threshold
-            if not (adj_high >= max_t or adj_low <= min_t):
-                high = max(high, row["high"])
-                low = min(low, row["low"])
+            min_target, max_target = MyHelper.min_max_target(reference_price)
+            if not ((adj_high_30 >= max_target) or (adj_low_30 <= min_target)) :
+                high = max(high, row30["high"])
+                low = min(low, row30["low"])
                 continue
 
-            # threshold broken → capture event
-            events.append(
-                self._capture_event(
-                    symbol=symbol,
-                    start_time=start_time,
-                    end_time=row["timestamp"],
-                    open_price=ref_price,
-                    high=high,
-                    low=low,
-                    close=row["close"],
-                    factor=factor_ratio,
-                )
+            start_date = row30["timestamp"]
+            end_date = start_date + pd.Timedelta(value=self.__quantity, unit=self.__unit.value) # type: ignore
+            request_bars = StockBarsRequest(
+                symbol_or_symbols=row30["symbol"],
+                timeframe=TimeFrame(amount=1, unit=TimeFrameUnit.Minute), # type: ignore
+                start=start_date,
+                end=end_date,
+                adjustment=Adjustment.RAW,
+                feed=self.__feed, # type: ignore
             )
+            df_min = self.__shdc.get_stock_bars(request_bars).df # type: ignore
+            self.__change_df(df_min)
 
-            # reset reference values
-            ref_price = row["close"]
-            ref_factor = float(row["close_adj"]) / float(row["close"])
-            start_time = row["timestamp"] + pd.Timedelta(minutes=1)
-            low, high = ref_price, ref_price
+            for _, m in df_min.iterrows():
+                price_point_adj = m["close"] * factor_ratio
+                min_target, max_target = MyHelper.min_max_target(reference_price)
+                hit_up = price_point_adj >= max_target
+                hit_down = price_point_adj <= min_target
+                low = min(low, m["low"])
+                high = max(high, m["high"])
+                if not (hit_up or hit_down):
+                    continue
+                
+                if factor_ratio > 1:
+                    high = round(high / factor_ratio, 3)
+                elif factor_ratio < 1:
+                    low = round(low * factor_ratio, 3)
+                events.append({
+                    "symbol": symbol,
+                    "start_time": start_time,
+                    "end_time": m["timestamp"],
+                    "open": reference_price / factor_ratio,
+                    "high": high,
+                    "low": low,
+                    "close": m["close"],
+                    "close_adj": price_point_adj,
+                    "factor": factor_ratio,
+                    "pct_change": (price_point_adj - reference_price) / reference_price,
+                })
+                reference_price = m["close"]
+                start_time = m["timestamp"] + pd.Timedelta(minutes=1)
+                low = reference_price
+                high = reference_price
+                reference_factor = candle_factor
+                factor_ratio = 1.0
 
-        # final event for last candle
-        last_row = df.iloc[-1]
-        events.append(
-            self._capture_event(
-                symbol=symbol,
-                start_time=start_time,
-                end_time=last_row["timestamp"],
-                open_price=ref_price,
-                high=high,
-                low=low,
-                close=last_row["close"],
-                factor=1.0,
-            )
-        )
+        events.append({
+            "symbol": symbol,
+            "start_time": start_time,
+            "end_time": df30.iloc[-1]["timestamp"],
+            "open": reference_price,
+            "high": high,
+            "low": low,
+            "close": df30.iloc[-1]["close"],
+            "close_adj": df30.iloc[-1]["close"] * factor_ratio,
+            "factor": factor_ratio,
+            "pct_change": (df30.iloc[-1]["close"] * factor_ratio - reference_price) / reference_price,
+        })
 
         return pd.DataFrame(events)
 
-    def _capture_event(
-        self,
-        symbol: str,
-        start_time: pd.Timestamp,
-        end_time: pd.Timestamp,
-        open_price: float,
-        high: float,
-        low: float,
-        close: float,
-        factor: float,
-    ) -> dict:
-        """Small helper to build event record."""
-        adj_close = close * factor
-        pct_change = (adj_close - open_price) / open_price
+    def query_from_file_data(self, quantity: int, unit: str = TimeFrameUnit.Minute,
+                             adjustment: Adjustment = Adjustment.ALL):
+        #Read start and end date from file
+        if adjustment == Adjustment.ALL:
+            adj_path = "adj_all"
+        elif adjustment == Adjustment.RAW:
+            adj_path = "adj_raw"
+        full_path = f"{self.__cp.PATH_TO_SAVE}{quantity}{unit.value}_history_{adj_path}/{self.__symbol}.csv" #type: ignore
+        self.__df = pd.read_csv(full_path, parse_dates=['timestamp'])
+        self.__df = self.__df.sort_values(by=["symbol", "timestamp"]).reset_index(drop=True)
 
-        return {
-            "symbol": symbol,
-            "start_time": start_time,
-            "end_time": end_time,
-            "open": open_price,
-            "high": high,
-            "low": low,
-            "close": close,
-            "close_adj": adj_close,
-            "factor": factor,
-            "pct_change": pct_change,
-        }
+    def query_historical_data(self, start: str, end: str, quantity: int, unit: str = TimeFrameUnit.Minute,
+                              adjustment: Adjustment = Adjustment.ALL):
+        # Convert string dates to pandas timestamps in New York timezone with start_date time equal to 00:00:01 AM and end_date time equal to 11:59:59 PM
+        start_date = pd.Timestamp(start).tz_localize(ZoneInfo("America/New_York")).floor('D') + pd.Timedelta(seconds=1)
+        end_date = pd.Timestamp(end).tz_localize(ZoneInfo("America/New_York")).ceil('D') - pd.Timedelta(seconds=1)
+        # Create the request for stock bars
+        request_bars =StockBarsRequest(
+            symbol_or_symbols=self.__symbol,
+            timeframe=TimeFrame(amount=quantity, unit=unit), # type: ignore
+            start=start_date,
+            end=end_date,
+            adjustment=adjustment, # type: ignore
+            feed=self.__feed, # type: ignore
+        )
+        # Execute the query
+        try:
+            self.__df = self.__shdc.get_stock_bars(request_bars).df # type: ignore
+            if not self.__df.empty:
+                self.__change_df(self.__df)
+        except Exception as e:
+            #If error contains text "invalid symbol", print message and set self.__df to None
+            #otherwise, raise the exception
+            if "invalid symbol" in str(e).lower():
+                print(f"Error: Invalid symbol '{self.__symbol}'. No data retrieved.")
+                self.__df = pd.DataFrame()
+                return
+            else:
+                raise e
+    
+    def merge_raw_and_all_from_files(self, quantity: int, unit: str = TimeFrameUnit.Minute):
+        #Load adjusted all data
+        self.__quantity = quantity
+        self.__unit = unit
+        self.query_from_file_data(quantity=quantity, unit=unit, adjustment=Adjustment.ALL)
+        df_all = self.get_df()
+        #Load adjusted raw data
+        self.query_from_file_data(quantity=quantity, unit=unit, adjustment=Adjustment.RAW)
+        df_raw = self.get_df()
+        #Merge df_all and df_raw using as keys symbol and timestamp bringing all columns from df_raw and only close column from df_all
+        self.__df = pd.merge(df_all[['symbol', 'timestamp', 'close']], df_raw, on=['symbol', 'timestamp'], how='inner', suffixes=('_adj', ''))
 
-    # ------------------------------------------------------------
-    # Public Getter
-    # ------------------------------------------------------------
+    def trim_df_by_date(self, start: str, end: str):
+        # Convert string dates to pandas timestamps in New York timezone
+        start_date = pd.Timestamp(start).tz_localize(ZoneInfo("America/New_York"))
+        end_date = pd.Timestamp(end).tz_localize(ZoneInfo("America/New_York"))
+        # Trim the dataframe
+        self.__df = self.__df[(self.__df['timestamp'] >= start_date) & (self.__df['timestamp'] <= end_date)].reset_index(drop=True)
 
     def get_df(self) -> pd.DataFrame:
-        """Return current internal DataFrame (never None)."""
-        return self._df if self._df is not None else pd.DataFrame()
-
-
-# ============================================================
-#                    MyAlpacaJob
-# ============================================================
+        return self.__df
+    
+    def __change_df(self, df: pd.DataFrame):
+        df.insert(0, 'symbol', df.index.get_level_values('symbol'))
+        df.insert(1, 'timestamp', df.index.get_level_values('timestamp').tz_convert('America/New_York')) # type: ignore
 
 class MyAlpacaJob:
-    """
-    Job orchestrator: runs symbol loops, triggers downloads,
-    merges, trims, and saves CSV outputs.
+    def __init__(self, start: str, end: str, quantity: int, unit: str, my_index_list=None,
+                 stock_list: list[str] = [], adjustment: Adjustment = Adjustment.ALL):
+        self.__cp = ConnectionParameters()
+        if my_index_list is not None and not isinstance(my_index_list, MyMarketIndexList):
+            raise TypeError("my_index_list parameter must be of the class MyMarketIndexList")
+        self.__my_index_list = my_index_list
+        self.__start = start
+        self.__end = end
+        self.__quantity = quantity
+        self.__unit = unit
+        self.__stock_list = stock_list
+        self.__adjustment = adjustment
 
-    Refactored under Option B:
-    - clearer naming
-    - smaller units
-    - no deep structural changes
-    """
-
-    def __init__(
-        self,
-        start: str,
-        end: str,
-        quantity: int,
-        unit: TimeFrameUnit,
-        my_index_list: MyMarketIndexList | None = None,
-        stock_list: list[str] | None = None,
-        adjustment: Adjustment = Adjustment.ALL,
-    ):
-        self._cfg = ConnectionParameters()
-        self._start = start
-        self._end = end
-        self._quantity = quantity
-        self._unit = unit
-        self._adjustment = adjustment
-
-        self._index_list = my_index_list
-        self._stock_list = stock_list or []
-
-        if my_index_list is not None and not isinstance(
-            my_index_list, MyMarketIndexList
-        ):
-            raise TypeError("my_index_list must be MyMarketIndexList")
-
-    # ------------------------------------------------------------
-    # Symbol Resolution
-    # ------------------------------------------------------------
-
-    def _resolve_symbols(self) -> list[str]:
-        """Pick symbols based on provided stock_list, index list or folder."""
-        if self._stock_list:
-            return self._stock_list
-
-        if self._index_list is not None:
-            cons = self._index_list.get_selected_constituents()
-            return cons["symbol"].unique().tolist()
-
-        # fallback: read from local folder
-        folder = (
-            f"{self._cfg.PATH_TO_SAVE}"
-            f"{self._quantity}{self._unit.value}_history_adj_{self._adjustment.value}/"
-        )
-        if not os.path.exists(folder):
-            raise ValueError("No symbols available in local directory.")
-
-        symbols = [f.replace(".csv", "") for f in os.listdir(folder)]
-        return symbols
-
-    # ------------------------------------------------------------
-    # Save Single Symbol
-    # ------------------------------------------------------------
-
-    def _save_symbol(self, symbol: str, out_path: str) -> None:
-        stock = MyAlpacaStock(symbol=symbol)
-        stock.query_historical_data(
-            start=self._start,
-            end=self._end,
-            quantity=self._quantity,
-            unit=self._unit,
-            adjustment=self._adjustment,
-        )
-        df = stock.get_df()
-
-        if df.empty:
-            print(f"[WARN] No data for {symbol}")
-            return
-
-        df.to_csv(f"{out_path}{symbol}.csv", index=False)
-        print(f"[OK] Saved: {out_path}{symbol}.csv")
-
-    # ------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------
-
-    def save_to_folder(self, limit: int = 999999) -> None:
-        """
-        Download all symbols (up to limit) and write CSV to Bronze folders.
-        """
-        out_path = f"{self._cfg.PATH_TO_SAVE}{self._quantity}{self._unit.value}_history/"
-        symbols = self._resolve_symbols()[:limit]
-
-        os.makedirs(out_path, exist_ok=True)
-
+    def save_to_folder(self, limit: int):
+        #Bring the index list data frame and turn it into a list of symbols without duplicates
+        full_path = f"{self.__cp.PATH_TO_SAVE}{self.__quantity}{self.__unit.value}_history/" #type: ignore
+        symbols = self.__get_list_of_symbols()[:limit]   
         for symbol in symbols:
-            # skip if already exists
-            file_path = f"{out_path}{symbol}.csv"
-            if os.path.exists(file_path):
-                print(f"[SKIP] {symbol} already exists.")
-                continue
-            self._save_symbol(symbol, out_path)
+            #check if symbol is already saved in folder
+            try:
+                already_saved = pd.read_csv(f"{full_path}{symbol}.csv")
+                if not already_saved.empty:
+                    print(f"Data for symbol {symbol} already exists in {full_path}{symbol}.csv. Skipping download.")
+                    continue
+            except FileNotFoundError:
+                pass
+            my_alpaca_stock = MyAlpacaStock(symbol=symbol)
+            my_alpaca_stock.query_historical_data(start=self.__start, end=self.__end, quantity=self.__quantity,
+                                                  unit=self.__unit, adjustment=self.__adjustment)
+            df = my_alpaca_stock.get_df()
+            if not df.empty:
+                #Save Dataframe as CSV file in folder "alpaca_data" with filename as symbol.csv {self.__cp.PATH_TO_SAVE}
+                df.to_csv(f"{full_path}{symbol}.csv", index=False)
+                print(f"Saved data for symbol {symbol} to {full_path}{symbol}.csv")
+            else:
+                print(f"No data to save for symbol {symbol}.")
 
+    def __get_list_of_symbols(self) -> list[str]:
+        if self.__stock_list:
+            return self.__stock_list
+        elif not self.__my_index_list is None:
+            historical_constituents = self.__my_index_list.get_selected_constituents()
+            return historical_constituents['symbol'].unique().tolist()
+        elif not self.__stock_list:
+            full_path = f"{self.__cp.PATH_TO_SAVE}{self.__quantity}{self.__unit.value}_history_adj_{self.__adjustment.value}/" # type: ignore
+            self.__stock_list = os.listdir(full_path)
+            #Remove suffix .csv from each element of the list
+            self.__stock_list = [symbol.replace('.csv', '') for symbol in self.__stock_list]            
+            return self.__stock_list
+        else:
+            raise ValueError("No symbols found in the index constituents and no stock list provided.")
+        
+    def save_by_day_consolidated(self, size_indices_filename: str = "Size Indices.xlsx", sector_indices_filename: str = "Sector Indices.xlsx"):
+        my_size_indices = MyMarketIndexList()
+        my_sector_indices = MyMarketIndexList()
+        my_size_indices.set_selected_indices_from_file(size_indices_filename)
+        my_sector_indices.set_selected_indices_from_file(sector_indices_filename)
+        
+        #TEMPORAL FOR PROJECT AT UNIVERSITY INIT
+        # sector_cons = my_sector_indices.get_selected_constituents("sector_constituents.csv")
+        sector_cons = my_sector_indices.get_selected_constituents(filename="sector_constituents.csv", only_active=True, active_on_date="2016-01-04")
+        sector_cons = (
+            sector_cons
+            .groupby('index_symbol')
+            .sample(n=5, replace=False, random_state=75)
+            .reset_index(drop=True)
+        )
+        #TEMPORAL FOR PROJECT AT UNIVERSITY END
+
+        size_cons = my_size_indices.get_selected_constituents("size_constituents.csv")
+        for symbol in self.__get_list_of_symbols():
+            #TEMPORAL FOR PROJECT AT UNIVERSITY INIT
+            if not symbol in sector_cons['symbol'].values:
+                continue
+            # if self.__get_list_of_symbols().index(symbol) >= 5:
+            #     break
+            #TEMPORAL FOR PROJECT AT UNIVERSITY END
+
+            my_alpaca_stock = MyAlpacaStock(symbol=symbol)
+            my_alpaca_stock.merge_raw_and_all_from_files(quantity=self.__quantity, unit=self.__unit)
+            my_alpaca_stock.trim_df_by_date(start='2016-01-01', end='2025-12-31')
+            df30 = my_alpaca_stock.get_df()
+            #Create new dataframe by one day intervals from df30 with first open, last close, last close_adj,
+            #higher high, lower low, sum of volume, sum of trade_count of the day
+            df_day = pd.DataFrame()
+            if df30.empty:
+                continue
+            df30['timestamp'] = pd.to_datetime(df30['timestamp'], utc=True).dt.tz_convert("America/New_York")
+            df30['date'] = df30['timestamp'].dt.date
+            #Turn timestamp back again to datetime with timezone America/New_York at 4:00 am and drop date column
+            df30['timestamp'] = pd.to_datetime(df30['date']).dt.tz_localize(ZoneInfo("America/New_York")) + pd.Timedelta(hours=4)
+            df30 = df30.drop(columns=['date'])
+            df_day = df30.groupby(['symbol','timestamp']).agg(
+                open=('open', 'first'),
+                high=('high', 'max'),
+                low=('low', 'min'),
+                close=('close', 'last'),
+                close_adj=('close_adj', 'last'),
+                volume=('volume', 'sum'),
+                trade_count=('trade_count', 'sum')
+            ).reset_index()
+            #add column to indicate for each date and symbol which size index it belongs to (size_index)
+            #considering the start_date and end_date of each constituent
+            df_day['size_index'] = None            
+            df_day['sector_index'] = None
+            for _, row in size_cons.iterrows():
+                mask = (df_day['symbol'] == row['symbol']) & (df_day['timestamp'] >= row['start_date']) & (df_day['timestamp'] <= row['end_date'])
+                df_day.loc[mask, 'size_index'] = row['index_symbol']
+            for _, row in sector_cons.iterrows():
+                mask = (df_day['symbol'] == row['symbol']) & (df_day['timestamp'] >= row['start_date']) & (df_day['timestamp'] <= row['end_date'])
+                df_day.loc[mask, 'sector_index'] = row['index_symbol']
+            #Save df_day to folder "1Day_history_merged" with filename as symbol.csv
+            full_path = f"{self.__cp.PATH_TO_SAVE}1Day_history_merged/"
+            df_day.to_csv(f"{full_path}{symbol}.csv", index=False)
+            print(f"Saved consolidated daily data for symbol {symbol} to {full_path}{symbol}.csv")
+
+    def add_variables_to_history_merged(self, raw_functions: dict = {}, adj_functions: dict = {}):
+        merged_path = f"{self.__cp.PATH_TO_SAVE}1Day_history_merged/"
+        raw_path = f"{self.__cp.PATH_TO_SAVE}30Min_history_adj_raw/"
+        adj_path = f"{self.__cp.PATH_TO_SAVE}30Min_history_adj_all/"
+        symbols_to_process = os.listdir(merged_path)
+        #Remove suffix .csv from each element of the list
+        symbols_to_process = [symbol.replace('.csv', '') for symbol in symbols_to_process]
+        for symbol in symbols_to_process:
+            raw_df = pd.read_csv(f"{raw_path}{symbol}.csv", parse_dates=['timestamp'])
+            adj_df = pd.read_csv(f"{adj_path}{symbol}.csv", parse_dates=['timestamp'])
+            merged_df = pd.read_csv(f"{merged_path}{symbol}.csv", parse_dates=['timestamp'])
+            merged_df['timestamp'] = pd.to_datetime(merged_df['timestamp'], utc=True).dt.tz_convert("America/New_York")
+            for _, func in raw_functions.items():
+                to_append_df = func(raw_df)
+                # Identify overlapping non-key columns
+                overlap = [c for c in to_append_df.columns 
+                        if c in merged_df.columns and c not in ['symbol', 'timestamp']]
+                # Drop those overlapping columns from the left df
+                merged_df = merged_df.drop(columns=overlap)
+                # Now merge — right dataframe values will be used for overlapping columns
+                merged_df = merged_df.merge(
+                    to_append_df,
+                    on=['symbol', 'timestamp'],
+                    how='left',
+                    suffixes=('', '')
+                )
+            for _, func in adj_functions.items():
+                to_append_df = func(adj_df)
+                # Identify overlapping non-key columns
+                overlap = [c for c in to_append_df.columns 
+                        if c in merged_df.columns and c not in ['symbol', 'timestamp']]
+                # Drop those overlapping columns from the left df
+                merged_df = merged_df.drop(columns=overlap)
+                # Now merge — right dataframe values will be used for overlapping columns
+                merged_df = merged_df.merge(
+                    to_append_df,
+                    on=['symbol', 'timestamp'],
+                    how='left',
+                    suffixes=('', '')
+                )
+            merged_df.to_csv(f"{merged_path}{symbol}.csv", index=False)
+            print(f"Added variables to merged data for symbol {symbol} and saved to {merged_path}{symbol}.csv")
