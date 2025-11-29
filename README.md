@@ -108,7 +108,7 @@ Incluye:
 
 ## 🥇 Fase 2 — Feature Engineering (Gold Layer)
 📄 Código: `processing/procesamiento_fase_2.py`  
-Origen técnico: :contentReference[oaicite:2]{index=2}
+
 
 Incluye:
 - Cálculo de volatilidad (% High–Low, % Open–Close)  
