@@ -197,13 +197,11 @@ Equity-Volatility-Lakehouse-Platform/
 - Cuenta en Alpaca y EODHD (para API keys)
 - Spark 3.x (si corres procesamiento local)
 
-### Instalación
-
 ```bash
 git clone https://github.com/<tu-usuario>/proyecto-volatilidad.git
 cd proyecto-volatilidad
 pip install -r requirements.txt
-
+```
 
 
 
