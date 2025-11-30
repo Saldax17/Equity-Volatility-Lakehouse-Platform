@@ -92,7 +92,6 @@ Feature engineering orientado a series de tiempo:
 
 ## 🥈 Fase 1 — Limpieza y Rejilla Temporal (Silver Layer)
 📄 Código: `processing/procesamiento_fase_1.py`  
-Origen técnico: :contentReference[oaicite:1]{index=1}
 
 Incluye:
 - Lectura desde Iceberg (Bronze)  
@@ -164,28 +163,27 @@ Equity-Volatility-Lakehouse-Platform/
 │   └── helpers.py
 │
 ├── docs/
-│   ├── EDA y limpieza SQL.docx
-│   ├── Presentacion.pdf
-│   ├── Preliminar.pdf
-│   ├── Propuesta.pdf
-│   └── arquitectura_medallion.drawio
+│   └── EDA y limpieza SQL.docx
 │
 ├── ingestion/
-│   └── consulta_de_datos_con_apis.ipynb   
+│   └── consulta_de_datos_con_apis.ipynb
 │
 ├── processing/
 │   ├── Procesamiento_fase_1.ipynb
-│   └── Procesamiento_fase_2.ipynb 
+│   └── Procesamiento_fase_2.ipynb
 │
 ├── architecture/
-│   ├── arquitectura_medallion.png
-│   ├── pipeline_completo.png
-│   └── arquitectura_aws.png
+│   ├── Arquitectura Lakehouse.drawio.png
+│   ├── Fase de Ingesta.drawio.png
+│   ├── Pipeline Procesamiento Distribuido.drawio.png
+│   ├── Gold Layer Diagram.drawio.png
+│   └── Propuesta de Despliegue.drawio.png
 │
 ├── data/     # (Ignorado en GitHub)
 │   ├── bronze/
 │   ├── silver/
 │   └── gold/
+
 
 ```
 
