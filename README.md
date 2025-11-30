@@ -128,7 +128,6 @@ Modelos implementados:
 - Random Forest  
 - Gradient Boosting  
 - XGBoost  
-- K-Means (clustering)
 
 Evaluación del desempeño:
 - **F1-score** como métrica principal  
@@ -163,7 +162,10 @@ Equity-Volatility-Lakehouse-Platform/
 │   └── helpers.py
 │
 ├── docs/
-│   └── EDA y limpieza SQL.docx
+│   ├── EDA y limpieza SQL.docx
+│   ├── eda/
+│   │   eda_parte_1.ipynb
+│   │   eda_parte_2.ipynb
 │
 ├── ingestion/
 │   └── consulta_de_datos_con_apis.ipynb
@@ -183,6 +185,8 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── bronze/
 │   ├── silver/
 │   └── gold/
+
+
 
 
 ```
