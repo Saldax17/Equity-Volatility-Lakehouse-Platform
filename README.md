@@ -114,7 +114,7 @@ Incluye:
 - Gap de apertura vs close previo  
 - Lookbacks:
   - 1d, 7d, 28d, 112d  
-- Generación de columnas `pct_change_<period>`  
+- Generación de columnas
 - Limpieza de columnas auxiliares  
 - Ordenamiento por símbolo + timestamp  
 
