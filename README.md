@@ -159,13 +159,14 @@ Equity-Volatility-Lakehouse-Platform/
 │   ├── my_ishares.py
 │   ├── my_models.py
 │   ├── my_stock_functions.py
-│   └── helpers.py
+│   └── my_helper.py
 │
 ├── docs/
 │   ├── EDA y limpieza SQL.docx
 │   ├── eda/
 │   │   eda_parte_1.ipynb
 │   │   eda_parte_2.ipynb
+│   ├── tester.ipynb
 │
 ├── ingestion/
 │   └── consulta_de_datos_con_apis.ipynb
